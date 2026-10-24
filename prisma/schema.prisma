@@ -1,0 +1,304 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String?    @unique
+  name      String?
+  createdAt DateTime   @default(now())
+  projects  Project[]
+  stats     UserStats?
+  bookmarks Bookmark[]
+  userBadges UserBadge[]
+  profile   UserProfile?
+}
+
+
+
+model UserStats {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  points            Int       @default(0)
+  currentStreak     Int       @default(0)
+  lastActiveDate    DateTime?
+  dailyGoalTarget   Int       @default(100)
+  dailyGoalProgress Int       @default(0)
+  tasksCompleted    Int       @default(0)
+  tasksTotal        Int       @default(0)
+  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  title     String
+  category  String
+  aiScore   Int?
+  userId    String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model Resume {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ContactSubmission {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String?
+  message   String
+  status    String   @default("new")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model NewsletterSubscriber {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  name           String?
+  status         String    @default("active")
+  subscribedAt   DateTime  @default(now())
+  unsubscribedAt DateTime?
+  source         String?
+  preferences    Json?
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([subscribedAt])
+}
+
+model QuizCategory {
+  id             String   @id @default(uuid())
+  slug           String   @unique
+  name           String
+  iconUrl        String
+  totalQuestions Int
+  quizzes        Quiz[]
+  createdAt      DateTime @default(now())
+}
+
+model Quiz {
+  id             String  @id @default(cuid())
+  title          String
+  description    String?
+  difficulty     String
+  totalQuestions Int
+
+  categoryId String
+  category   QuizCategory @relation(fields: [categoryId], references: [id])
+  questions  Question[]
+  attempts   QuizAttempt[]
+  createdAt  DateTime     @default(now())
+}
+
+model Question {
+  id      String @id @default(uuid())
+  quizId  String
+  quiz    Quiz   @relation(fields: [quizId], references: [id])
+  text    String
+  options Json // ["A", "B", "C", "D"]
+  correct Int // index of correct option
+}
+
+model QuizAttempt {
+  id        String   @id @default(uuid())
+  userId    String
+  quizId    String
+  score     Int
+  total     Int
+  createdAt DateTime @default(now())
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+}
+
+// Search History for tracking user searches
+model SearchHistory {
+  id            String   @id @default(uuid())
+  userId        String?  // Optional - null for anonymous searches
+  query         String
+  resultsCount  Int      @default(0)
+  isZeroResult  Boolean  @default(false)
+  category      String?  // Optional - what category was searched
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([query])
+  @@index([createdAt])
+  @@index([isZeroResult])
+}
+
+// Badge Categories: LEARNING, STREAK, SOCIAL, MILESTONE
+enum BadgeCategory {
+  LEARNING
+  STREAK
+  SOCIAL
+  MILESTONE
+}
+
+// Badge Rarity Levels
+enum BadgeRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+model Badge {
+  id          String        @id @default(uuid())
+  slug        String        @unique
+  name        String
+  description String
+  icon        String        // Emoji or icon URL
+  category    BadgeCategory
+  criteria    Json          // Badge unlock conditions
+  points      Int           @default(10)
+  rarity      BadgeRarity   @default(COMMON)
+  order       Int           @default(0) // For display ordering
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  userBadges  UserBadge[]
+
+  @@index([category])
+  @@index([rarity])
+  @@index([isActive])
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+  progress  Int?     // For multi-step badges (e.g., 5/10 completed)
+  metadata  Json?    // Additional context about how badge was earned
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId]) // Prevent duplicate badges
+  @@index([userId])
+  @@index([badgeId])
+  @@index([earnedAt])
+}
+
+model UserProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  username    String   @unique
+  bio         String?
+  avatar      String?
+  skills      Json?    // Array of skill strings
+  socialLinks Json?    // { github, linkedin, twitter, website }
+  isPublic    Boolean  @default(true)
+  location    String?
+  title       String?  // Job title
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([username])
+  @@index([isPublic])
+}
+
+model Bookmark {
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  url         String
+  description String?
+  category    String   @default("General")
+  tags        Json?    // Array of strings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model Roadmap {
+  id          String      @id @default(uuid())
+  title       String
+  description String?
+  milestones  Milestone[]
+  createdAt   DateTime    @default(now())
+}
+
+model Milestone {
+  id        String        @id @default(uuid())
+  title     String
+  roadmapId String
+  roadmap   Roadmap      @relation(fields: [roadmapId], references: [id])
+  progress  UserProgress[]
+}
+
+model UserProgress {
+  id          String   @id @default(uuid())
+  userId      String   // Clerk userId
+  milestoneId String
+  milestone   Milestone @relation(fields: [milestoneId], references: [id])
+  completed   Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, milestoneId])
+}
+
+model Resource {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  url         String
+  category    String
+  tags        Json?    // Array of strings like ["javascript", "tutorial"]
+  author      String?
+  difficulty  String?  // e.g., "beginner", "intermediate", "advanced"
+  readingTime Int?     // in minutes
+  rating      Float?   // average rating, e.g., 4.5
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([tags])
+}
+
+model DigestSubscription {
+  id               String    @id @default(uuid())
+  userId           String    @unique // Clerk userId
+  email            String
+  frequency        String    @default("weekly") // "weekly" | "biweekly"
+  sections         Json      // e.g. ["new_resources", "top_picks", "community_highlights"]
+  difficultyFilter String?   // "beginner" | "intermediate" | "advanced" | null (all levels)
+  unsubscribeToken String    @unique @default(uuid())
+  isActive         Boolean   @default(true)
+  lastSentAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([frequency])
+}
